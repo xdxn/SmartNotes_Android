@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 删除重复的LoadingDialog样式定义 -->
+    <style name="EditorButton">
+        <item name="android:layout_width">40dp</item>
+        <item name="android:layout_height">40dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:scaleType">fitCenter</item>
+    </style>
 </resources> 

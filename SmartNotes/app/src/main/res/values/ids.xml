@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="btnLogout" type="id" />
+    <item name="fabAdd" type="id" />
+    <item name="tabLayout" type="id" />
+    <item name="tvTime" type="id" />
+</resources>

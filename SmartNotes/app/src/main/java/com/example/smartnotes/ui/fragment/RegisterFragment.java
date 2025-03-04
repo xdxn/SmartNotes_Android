@@ -2,7 +2,8 @@ package com.example.smartnotes.ui.fragment;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.CountDownTimer;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,132 +13,117 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.example.smartnotes.R;
-import com.google.android.material.button.MaterialButton;
-import com.google.android.material.textfield.TextInputEditText;
-
-import com.example.smartnotes.network.ApiService;
+import com.example.smartnotes.databinding.FragmentRegisterBinding;
 import com.example.smartnotes.model.LoginResponse;
-import com.example.smartnotes.utils.UserManager;
+import com.example.smartnotes.network.ApiHelper;
 import com.example.smartnotes.ui.activity.MainActivity;
+import com.example.smartnotes.utils.SharedPreferencesUtil;
 
 public class RegisterFragment extends Fragment {
-    private TextInputEditText etPhone;
-    private TextInputEditText etVerifyCode;
-    private TextInputEditText etPassword;
-    private MaterialButton btnSendCode;
-    private MaterialButton btnRegister;
-    private CountDownTimer countDownTimer;
+    private static final String TAG = "RegisterFragment";
+    private FragmentRegisterBinding binding;
+    private boolean isWaitingForCode = false;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_register, container, false);
+        binding = FragmentRegisterBinding.inflate(inflater, container, false);
+        return binding.getRoot();
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        initViews();
+    }
 
-        etPhone = view.findViewById(R.id.etPhone);
-        etVerifyCode = view.findViewById(R.id.etVerifyCode);
-        etPassword = view.findViewById(R.id.etPassword);
-        btnSendCode = view.findViewById(R.id.btnSendCode);
-        btnRegister = view.findViewById(R.id.btnRegister);
-
-        btnSendCode.setOnClickListener(v -> sendVerificationCode());
-        btnRegister.setOnClickListener(v -> register());
+    private void initViews() {
+        binding.btnSendCode.setOnClickListener(v -> sendVerificationCode());
+        binding.btnRegister.setOnClickListener(v -> attemptRegister());
     }
 
     private void sendVerificationCode() {
-        String phone = etPhone.getText().toString().trim();
-        if (phone.isEmpty()) {
-            Toast.makeText(getContext(), "请输入手机号", Toast.LENGTH_SHORT).show();
+        String phone = binding.etPhone.getText().toString().trim();
+
+        if (TextUtils.isEmpty(phone)) {
+            binding.etPhone.setError("请输入手机号码");
             return;
         }
 
-        btnSendCode.setEnabled(false);
-        btnSendCode.setText("发送中...");
+        if (isWaitingForCode) {
+            Toast.makeText(requireContext(), "请稍后再试", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        ApiService.sendVerificationCode(phone, getContext(), new ApiService.ApiCallback<Void>() {
+        isWaitingForCode = true;
+        binding.btnSendCode.setEnabled(false);
+
+        ApiHelper.sendVerificationCode(phone, requireContext(), new ApiHelper.ApiCallback<Void>() {
             @Override
             public void onSuccess(Void result) {
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(getContext(), "验证码已发送", Toast.LENGTH_SHORT).show();
-                    startCountDown();
-                });
+                Toast.makeText(requireContext(), "验证码已发送", Toast.LENGTH_SHORT).show();
+                startCountdown();
             }
 
             @Override
             public void onError(String message) {
-                requireActivity().runOnUiThread(() -> {
-                    btnSendCode.setEnabled(true);
-                    btnSendCode.setText("发送验证码");
-                });
+                isWaitingForCode = false;
+                binding.btnSendCode.setEnabled(true);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    private void startCountDown() {
-        btnSendCode.setEnabled(false);
-        countDownTimer = new CountDownTimer(60000, 1000) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                btnSendCode.setText(millisUntilFinished / 1000 + "秒后重试");
-            }
-
-            @Override
-            public void onFinish() {
-                btnSendCode.setEnabled(true);
-                btnSendCode.setText("发送验证码");
-            }
-        }.start();
+    private void startCountdown() {
+        // TODO: 实现倒计时功能
+        binding.btnSendCode.postDelayed(() -> {
+            isWaitingForCode = false;
+            binding.btnSendCode.setEnabled(true);
+        }, 60000);
     }
 
-    private void register() {
-        String phone = etPhone.getText().toString().trim();
-        String verifyCode = etVerifyCode.getText().toString().trim();
-        String password = etPassword.getText().toString().trim();
+    private void attemptRegister() {
+        String phone = binding.etPhone.getText().toString().trim();
+        String code = binding.etVerificationCode.getText().toString().trim();
+        String password = binding.etPassword.getText().toString().trim();
 
-        if (phone.isEmpty() || verifyCode.isEmpty() || password.isEmpty()) {
-            Toast.makeText(getContext(), "请填写完整信息", Toast.LENGTH_SHORT).show();
+        if (TextUtils.isEmpty(phone)) {
+            binding.etPhone.setError("请输入手机号码");
             return;
         }
 
-        btnRegister.setEnabled(false);
-        btnRegister.setText("注册中...");
+        if (TextUtils.isEmpty(code)) {
+            binding.etVerificationCode.setError("请输入验证码");
+            return;
+        }
 
-        ApiService.register(phone, verifyCode, password, getContext(), new ApiService.ApiCallback<LoginResponse>() {
+        if (TextUtils.isEmpty(password)) {
+            binding.etPassword.setError("请输入密码");
+            return;
+        }
+
+        ApiHelper.register(phone, code, password, requireContext(), new ApiHelper.ApiCallback<LoginResponse>() {
             @Override
             public void onSuccess(LoginResponse result) {
-                // 保存登录信息
-                UserManager.saveLoginInfo(requireContext(), result);
+                Log.d(TAG, "注册成功：" + result.toString());
+                // 保存用户信息
+                SharedPreferencesUtil.saveUserInfo(requireContext(), result);
                 // 跳转到主页
-                startMainActivity();
+                startActivity(new Intent(requireContext(), MainActivity.class));
+                requireActivity().finish();
             }
 
             @Override
             public void onError(String message) {
-                requireActivity().runOnUiThread(() -> {
-                    btnRegister.setEnabled(true);
-                    btnRegister.setText("注册");
-                });
+                Log.e(TAG, "注册失败：" + message);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
             }
         });
-    }
-
-    private void startMainActivity() {
-        Intent intent = new Intent(requireContext(), MainActivity.class);
-        // 清除任务栈中的其他Activity
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-        if (countDownTimer != null) {
-            countDownTimer.cancel();
-        }
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
     }
 } 
